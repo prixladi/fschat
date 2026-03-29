@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 
-#include "fs.h"
+#include "fschat.h"
 #include "updater.h"
 #include "utils/log.h"
 
@@ -21,9 +21,6 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 #define USERNAME_FILENAME ".username"
-
-#define MIN_USERNAME_LENGTH 3
-#define MAX_USERNAME_LENGTH 64
 
 #define OPTION(t, p) { t, offsetof(struct options, p), 1 }
 
@@ -38,17 +35,17 @@ static const struct fuse_opt option_spec[] = { OPTION("--username=%s", username)
 
 static void show_help(const char *progname);
 
-static void *fschat_init(struct fuse_conn_info *conn, struct fuse_config *cfg);
-static int fschat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi);
-static int fschat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi,
-                          enum fuse_readdir_flags flags);
-static int fschat_open(const char *path, struct fuse_file_info *fi);
-static int fschat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
-static int fschat_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+static void *fs_init(struct fuse_conn_info *conn, struct fuse_config *cfg);
+static int fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi);
+static int fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi,
+                      enum fuse_readdir_flags flags);
+static int fs_open(const char *path, struct fuse_file_info *fi);
+static int fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+static int fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 
 static int options_free(struct options *opts);
 
-static struct fs fs;
+static struct fschat fschat;
 int
 main(int argc, char *argv[])
 {
@@ -64,13 +61,6 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    size_t username_len = strlen(options.username);
-    if (username_len < MIN_USERNAME_LENGTH || username_len > MAX_USERNAME_LENGTH)
-    {
-        log_error("Username must be between %d and %d characters long", MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH);
-        return 1;
-    }
-
     if (options.show_help)
     {
         show_help(argv[0]);
@@ -81,21 +71,21 @@ main(int argc, char *argv[])
         return ret;
     }
 
-    if (fs_init(&fs, options.username) != 0)
+    if (fschat_init(&fschat, options.username) != 0)
     {
         fuse_opt_free_args(&args);
-        log_critical("Unable to init channel fs\n");
+        log_critical("Unable to init channel fschat\n");
         return 1;
     }
 
     struct channel *channel1 = channel_create("channel2", "");
     struct channel *channel2 = channel_create("channel1", "");
     channel1->next = channel2;
-    fs.channels = channel1;
+    fschat.channels = channel1;
 
     struct updater updater = { 0 };
 
-    if (updater_init(&updater, &fs) != 0)
+    if (updater_init(&updater, &fschat) != 0)
     {
         log_critical("Unable to init updater\n");
         return 1;
@@ -106,12 +96,9 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    struct fuse_operations oper = { .init = fschat_init,
-                                    .getattr = fschat_getattr,
-                                    .readdir = fschat_readdir,
-                                    .open = fschat_open,
-                                    .read = fschat_read,
-                                    .write = fschat_write };
+    struct fuse_operations oper = {
+        .init = fs_init, .getattr = fs_getattr, .readdir = fs_readdir, .open = fs_open, .read = fs_read, .write = fs_write
+    };
 
     log_info("File system starting\n");
     int ret = fuse_main(args.argc, args.argv, &oper, NULL);
@@ -120,7 +107,7 @@ main(int argc, char *argv[])
 
     updater_stop(&updater);
 
-    fs_free(&fs);
+    fschat_free(&fschat);
     options_free(&options);
 
     return ret;
@@ -136,7 +123,7 @@ show_help(const char *progname)
 }
 
 static void *
-fschat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
+fs_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
     (void)conn;
     (void)cfg;
@@ -144,7 +131,7 @@ fschat_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 }
 
 static int
-fschat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 {
     (void)fi;
 
@@ -158,7 +145,7 @@ fschat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
-        char *username = fs_copy_username_locked(&fs);
+        char *username = fschat_copy_username_locked(&fschat);
         stbuf->st_mode = __S_IFREG | 0666;
         stbuf->st_nlink = 1;
         stbuf->st_size = strlen(username);
@@ -166,7 +153,7 @@ fschat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
         return 0;
     }
 
-    struct channel *channel = find_channel_for_reading(&fs, path + 1);
+    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
     if (!channel)
         return -ENOENT;
 
@@ -180,8 +167,8 @@ fschat_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 }
 
 static int
-fschat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi,
-               enum fuse_readdir_flags flags)
+fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi,
+           enum fuse_readdir_flags flags)
 {
     (void)offset;
     (void)fi;
@@ -195,7 +182,7 @@ fschat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset
 
     filler(buf, USERNAME_FILENAME, NULL, 0, FUSE_FILL_DIR_PLUS);
 
-    struct channel *cursor = fs.channels;
+    struct channel *cursor = fschat.channels;
     while (cursor)
     {
         filler(buf, cursor->name, NULL, 0, FUSE_FILL_DIR_PLUS);
@@ -206,12 +193,12 @@ fschat_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset
 }
 
 static int
-fschat_open(const char *path, struct fuse_file_info *fi)
+fs_open(const char *path, struct fuse_file_info *fi)
 {
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
         return 0;
 
-    struct channel *channel = find_channel_for_reading(&fs, path + 1);
+    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
     if (!channel)
         return -ENOENT;
 
@@ -222,7 +209,7 @@ fschat_open(const char *path, struct fuse_file_info *fi)
 }
 
 static int
-fschat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     (void)fi;
 
@@ -232,7 +219,7 @@ fschat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
         found = true;
-        char *username = fs_copy_username_locked(&fs);
+        char *username = fschat_copy_username_locked(&fschat);
 
         len = MIN(size, strlen(username) - offset);
         if (len > 0)
@@ -242,7 +229,7 @@ fschat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     }
     else
     {
-        struct channel *channel = find_channel_for_reading(&fs, path + 1);
+        struct channel *channel = find_channel_for_reading(&fschat, path + 1);
         if (channel)
         {
             found = true;
@@ -261,7 +248,7 @@ fschat_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
 }
 
 static int
-fschat_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
+fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi)
 {
     (void)path;
     (void)fi;
@@ -274,29 +261,25 @@ fschat_write(const char *path, const char *buf, size_t size, off_t offset, struc
     }
 
     size_t cpy_size = size;
-    // Trim the trailing \n for usages such as `echo "Hey" > fs/channel`
+    // Trim the trailing \n for usages such as `echo "Hey" > fschat/channel`
     while (cpy_size > 0 && buf[cpy_size - 1] == '\n')
         cpy_size--;
 
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
-        if (cpy_size < MIN_USERNAME_LENGTH || cpy_size > MAX_USERNAME_LENGTH)
-        {
-            log_error("Username must be between %d and %d characters long", MIN_USERNAME_LENGTH, MAX_USERNAME_LENGTH);
-            return -EIO;
-        }
-
         char *username = malloc(cpy_size + 1);
         username[cpy_size] = '\0';
         memcpy(username, buf, cpy_size);
 
-        fs_replace_username_locked(&fs, username);
+        int swap_result = fschat_replace_username_locked(&fschat, username);
         free(username);
+        if (swap_result != 0)
+            return -EIO;
 
         return size;
     }
 
-    struct channel *channel = find_channel_for_reading(&fs, path + 1);
+    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
     if (!channel)
         return -ENOENT;
 

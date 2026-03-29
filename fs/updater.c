@@ -7,11 +7,11 @@
 static void *channels_update_loop(void *data);
 
 int
-updater_init(struct updater *updater, struct fs *fs)
+updater_init(struct updater *updater, struct fschat *fschat)
 {
     log_info("Updater initialized\n");
     memset(updater, 0, sizeof(struct updater));
-    updater->fs = fs;
+    updater->fschat = fschat;
     return 0;
 }
 
@@ -49,22 +49,22 @@ static void *
 channels_update_loop(void *data)
 {
     struct updater *updater = data;
-    struct fs *fs = updater->fs;
+    struct fschat *fschat = updater->fschat;
 
     size_t cnt = 0;
     while (!updater->exiting)
     {
         cnt++;
 
-        fs_lock_for_writing(fs);
+        fschat_lock_for_writing(fschat);
 
-        struct channel *channel = fs->channels;
+        struct channel *channel = fschat->channels;
         while (channel)
         {
-            char *str = str_printf("[%s-%ld]: Message Message Message Message", fs->username, cnt);
+            char *str = str_printf("[%s-%ld]: Message Message Message Message", fschat->username, cnt);
 
             channel_lock_for_writing(channel);
-            fs_unlock(fs);
+            fschat_unlock(fschat);
 
             size_t new_len = channel->contents_len + strlen(str);
             char *new_str = malloc(sizeof(char) * (new_len + 2));
@@ -79,15 +79,15 @@ channels_update_loop(void *data)
             channel->contents = new_str;
             channel->contents_len = new_len + 1;
 
-            fs_lock_for_writing(fs);
+            fschat_lock_for_writing(fschat);
             struct channel *next = channel->next;
             channel_unlock(channel);
             channel = next;
-            
+
             free(str);
         };
 
-        fs_unlock(fs);
+        fschat_unlock(fschat);
 
         sleep(1);
     }
