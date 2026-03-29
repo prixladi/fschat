@@ -1,67 +1,92 @@
 #include "stdlib.h"
 #include "string.h"
 
-#include "channels.h"
+#include "fs.h"
 #include "utils/log.h"
 
 int
-channel_store_init(struct channel_store *store)
+fs_init(struct fs *fs, const char *username)
 {
-    memset(store, 0, sizeof(struct channel_store));
+    memset(fs, 0, sizeof(struct fs));
 
-    store->lock = malloc(sizeof(pthread_rwlock_t));
-    if (pthread_rwlock_init(store->lock, NULL) != 0)
+    fs->lock = malloc(sizeof(pthread_rwlock_t));
+    if (pthread_rwlock_init(fs->lock, NULL) != 0)
     {
         log_error("Unable to init channels lock.\n");
-        free(store->lock);
-        store->lock = NULL;
+        free(fs->lock);
+        fs->lock = NULL;
         return 1;
     }
+    fs->username = str_dup(username);
+
+    log_info("Filesystem initialized, username '%s'\n", fs->username);
 
     return 0;
 }
 
-int
-channel_store_lock_for_reading(struct channel_store *store)
+char *
+fs_copy_username_locked(struct fs *fs)
 {
-    return pthread_rwlock_rdlock(store->lock);
+    fs_lock_for_reading(fs);
+    char *username = str_dup(fs->username);
+    fs_unlock(fs);
+    return username;
 }
 
 int
-channel_store_lock_for_writing(struct channel_store *store)
+fs_replace_username_locked(struct fs *fs, char *username)
 {
-    return pthread_rwlock_wrlock(store->lock);
+    fs_lock_for_writing(fs);
+    free(fs->username);
+    fs->username = str_dup(username);
+    log_info("Username changed to '%s'\n", fs->username);
+    fs_unlock(fs);
+    return 0;
 }
 
 int
-channel_store_unlock(struct channel_store *store)
+fs_free(struct fs *fs)
 {
-    return pthread_rwlock_unlock(store->lock);
-}
-
-int
-channel_store_free(struct channel_store *store)
-{
-    channel_store_lock_for_writing(store);
-    struct channel *cursor = store->channels;
+    fs_lock_for_writing(fs);
+    struct channel *cursor = fs->channels;
     while (cursor)
     {
         struct channel *next_cursor = cursor->next;
         channel_free(cursor);
         cursor = next_cursor;
     };
+    free(fs->username);
 
-    channel_store_unlock(store);
+    fs_unlock(fs);
 
-    if (store->lock)
-        pthread_rwlock_destroy(store->lock);
+    if (fs->lock)
+        pthread_rwlock_destroy(fs->lock);
 
-    free(store->lock);
+    free(fs->lock);
 
-    store->lock = NULL;
-    store->channels = NULL;
+    fs->lock = NULL;
+    fs->channels = NULL;
+    fs->username = NULL;
 
     return 0;
+}
+
+int
+fs_lock_for_reading(struct fs *fs)
+{
+    return pthread_rwlock_rdlock(fs->lock);
+}
+
+int
+fs_lock_for_writing(struct fs *fs)
+{
+    return pthread_rwlock_wrlock(fs->lock);
+}
+
+int
+fs_unlock(struct fs *fs)
+{
+    return pthread_rwlock_unlock(fs->lock);
 }
 
 int
@@ -103,10 +128,10 @@ channel_create(const char *name, const char *initial_text)
 }
 
 struct channel *
-find_channel_for_reading(struct channel_store *store, const char *name)
+find_channel_for_reading(struct fs *fs, const char *name)
 {
-    channel_store_lock_for_reading(store);
-    struct channel *cursor = store->channels;
+    fs_lock_for_reading(fs);
+    struct channel *cursor = fs->channels;
     while (cursor)
     {
         if (strcmp(name, cursor->name) == 0)
@@ -116,7 +141,7 @@ find_channel_for_reading(struct channel_store *store, const char *name)
         }
         cursor = cursor->next;
     };
-    channel_store_unlock(store);
+    fs_unlock(fs);
     return cursor;
 }
 

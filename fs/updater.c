@@ -7,22 +7,25 @@
 static void *channels_update_loop(void *data);
 
 int
-updater_init(struct updater *updater, struct channel_store *store)
+updater_init(struct updater *updater, struct fs *fs)
 {
+    log_info("Updater initialized\n");
     memset(updater, 0, sizeof(struct updater));
-    updater->store = store;
+    updater->fs = fs;
     return 0;
 }
 
 int
 updater_stop(struct updater *updater)
 {
+    log_info("Updater stopping...\n");
     if (updater->tid)
     {
         updater->exiting = true;
         pthread_join(updater->tid, NULL);
         updater->tid = 0;
     }
+    log_info("Updater stoped\n");
 
     return 0;
 }
@@ -38,6 +41,7 @@ updater_start(struct updater *updater)
 
     pthread_create(&updater->tid, NULL, channels_update_loop, updater);
 
+    log_info("Updater started\n");
     return 0;
 }
 
@@ -45,21 +49,23 @@ static void *
 channels_update_loop(void *data)
 {
     struct updater *updater = data;
-    struct channel_store *store = updater->store;
+    struct fs *fs = updater->fs;
 
     size_t cnt = 0;
     while (!updater->exiting)
     {
         cnt++;
-        char *str = str_printf("[USER-%ld]: Message Message Message Message", cnt);
 
-        channel_store_lock_for_writing(store);
+        fs_lock_for_writing(fs);
 
-        struct channel *channel = store->channels;
+        struct channel *channel = fs->channels;
         while (channel)
         {
+            char *str = str_printf("[%s-%ld]: Message Message Message Message", fs->username, cnt);
+
             channel_lock_for_writing(channel);
-            channel_store_unlock(store);
+            fs_unlock(fs);
+
             size_t new_len = channel->contents_len + strlen(str);
             char *new_str = malloc(sizeof(char) * (new_len + 2));
             if (channel->contents_len)
@@ -73,15 +79,16 @@ channels_update_loop(void *data)
             channel->contents = new_str;
             channel->contents_len = new_len + 1;
 
-            channel_store_lock_for_writing(store);
+            fs_lock_for_writing(fs);
             struct channel *next = channel->next;
             channel_unlock(channel);
             channel = next;
+            
+            free(str);
         };
 
-        channel_store_unlock(store);
+        fs_unlock(fs);
 
-        free(str);
         sleep(1);
     }
 

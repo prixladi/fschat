@@ -20,7 +20,7 @@ build_debug_address: setup
 	$(CC) $(FLAGS) $(SOURCES) -o ./build/fschat-debug
 
 run_debug_address: build_debug_address
-	./build/fschat-debug -f "./X"
+	./build/fschat-debug -f "./X" 
 
 build_debug_thread: FLAGS += -fsanitize=undefined,thread -g -D __DEBUG__
 build_debug_thread: setup

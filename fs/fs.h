@@ -1,5 +1,5 @@
-#ifndef CHANNELS__H
-#define CHANNELS__H
+#ifndef FS__H
+#define FS__H
 
 #include <stddef.h>
 
@@ -17,23 +17,26 @@ struct channel
     pthread_rwlock_t *lock;
 };
 
-struct channel_store
+struct fs
 {
-    pthread_rwlock_t *lock;
+    char *username;
     struct channel *channels;
+    pthread_rwlock_t *lock;
 };
 
-int channel_store_init(struct channel_store *store);
-int channel_store_free(struct channel_store *store);
-int channel_store_lock_for_reading(struct channel_store *store);
-int channel_store_lock_for_writing(struct channel_store *store);
-int channel_store_unlock(struct channel_store *store);
+int fs_init(struct fs *fs, const char *username);
+int fs_free(struct fs *fs);
+char *fs_copy_username_locked(struct fs *fs);
+int fs_replace_username_locked(struct fs *fs, char *username);
+int fs_lock_for_reading(struct fs *fs);
+int fs_lock_for_writing(struct fs *fs);
+int fs_unlock(struct fs *fs);
 
 struct channel *channel_create(const char *name, const char *initial_text);
 int channel_lock_for_reading(struct channel *channel);
 int channel_lock_for_writing(struct channel *channel);
 int channel_unlock(struct channel *channel);
-struct channel *find_channel_for_reading(struct channel_store *store, const char *name);
+struct channel *find_channel_for_reading(struct fs *fs, const char *name);
 int channel_free(struct channel *channel);
 
 #endif
