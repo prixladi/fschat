@@ -1,5 +1,5 @@
-#ifndef UPDATER__H
-#define UPDATER__H
+#ifndef updater__H
+#define updater__H
 
 #include "fschat.h"
 #include "utils/log.h"

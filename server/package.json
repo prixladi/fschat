@@ -1,0 +1,11 @@
+{
+  "name": "fschat-server",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.28.0",
+    "better-sqlite3": "^11.0.0"
+  }
+}

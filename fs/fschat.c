@@ -63,7 +63,7 @@ fschat_replace_username_locked(struct fschat *fschat, char *username)
     return 0;
 }
 
-int
+void
 fschat_free(struct fschat *fschat)
 {
     fschat_lock_for_writing(fschat);
@@ -86,8 +86,6 @@ fschat_free(struct fschat *fschat)
     fschat->lock = NULL;
     fschat->channels = NULL;
     fschat->username = NULL;
-
-    return 0;
 }
 
 int
@@ -164,7 +162,7 @@ find_channel_for_reading(struct fschat *fschat, const char *name)
     return cursor;
 }
 
-int
+void
 channel_free(struct channel *channel)
 {
     if (channel->lock)
@@ -185,6 +183,4 @@ channel_free(struct channel *channel)
     }
 
     free(channel);
-
-    return 0;
 }

@@ -15,7 +15,9 @@
 
 #include "fschat.h"
 #include "updater.h"
+
 #include "utils/log.h"
+#include "utils/memory.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -100,10 +102,10 @@ main(int argc, char *argv[])
         .init = fs_init, .getattr = fs_getattr, .readdir = fs_readdir, .open = fs_open, .read = fs_read, .write = fs_write
     };
 
-    log_info("File system starting\n");
+    log_info("FUSE starting\n");
     int ret = fuse_main(args.argc, args.argv, &oper, NULL);
     fuse_opt_free_args(&args);
-    log_info("File system stopped\n");
+    log_info("FUSE stopped\n");
 
     updater_stop(&updater);
 
@@ -145,11 +147,10 @@ fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
 
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
-        char *username = fschat_copy_username_locked(&fschat);
+        scoped char *username = fschat_copy_username_locked(&fschat);
         stbuf->st_mode = __S_IFREG | 0666;
         stbuf->st_nlink = 1;
         stbuf->st_size = strlen(username);
-        free(username);
         return 0;
     }
 
@@ -219,13 +220,11 @@ fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
         found = true;
-        char *username = fschat_copy_username_locked(&fschat);
+        scoped char *username = fschat_copy_username_locked(&fschat);
 
         len = MIN(size, strlen(username) - offset);
         if (len > 0)
             memcpy(buf, username + offset, len);
-
-        free(username);
     }
     else
     {
@@ -267,12 +266,11 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
 
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
-        char *username = malloc(cpy_size + 1);
+        scoped char *username = malloc(cpy_size + 1);
         username[cpy_size] = '\0';
         memcpy(username, buf, cpy_size);
 
         int swap_result = fschat_replace_username_locked(&fschat, username);
-        free(username);
         if (swap_result != 0)
             return -EIO;
 

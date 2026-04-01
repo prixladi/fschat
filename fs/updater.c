@@ -3,6 +3,9 @@
 #include <unistd.h>
 
 #include "updater.h"
+#include "api-client.h"
+
+#include "utils/memory.h"
 
 static void *channels_update_loop(void *data);
 
@@ -52,6 +55,7 @@ channels_update_loop(void *data)
     struct fschat *fschat = updater->fschat;
 
     size_t cnt = 0;
+
     while (!updater->exiting)
     {
         cnt++;
@@ -61,7 +65,7 @@ channels_update_loop(void *data)
         struct channel *channel = fschat->channels;
         while (channel)
         {
-            char *str = str_printf("[%s-%ld]: Message Message Message Message", fschat->username, cnt);
+            scoped char *str = str_printf("[%s-%ld]: Message Message Message Message", fschat->username, cnt);
 
             channel_lock_for_writing(channel);
             fschat_unlock(fschat);
@@ -83,8 +87,6 @@ channels_update_loop(void *data)
             struct channel *next = channel->next;
             channel_unlock(channel);
             channel = next;
-
-            free(str);
         };
 
         fschat_unlock(fschat);
