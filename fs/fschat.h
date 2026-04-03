@@ -10,11 +10,12 @@
 
 struct channel
 {
+    long id;
     char *name;
     char *contents;
     size_t contents_len;
     struct channel *next;
-    pthread_rwlock_t *lock;
+    long latest_message_timestamp;
 };
 
 struct fschat
@@ -32,11 +33,8 @@ int fschat_lock_for_reading(struct fschat *fschat);
 int fschat_lock_for_writing(struct fschat *fschat);
 int fschat_unlock(struct fschat *fschat);
 
-struct channel *channel_create(const char *name, const char *initial_text);
-int channel_lock_for_reading(struct channel *channel);
-int channel_lock_for_writing(struct channel *channel);
-int channel_unlock(struct channel *channel);
-struct channel *find_channel_for_reading(struct fschat *fschat, const char *name);
+struct channel *channel_create(long id, const char *name, const char *initial_text);
+struct channel *find_channel(struct fschat *fschat, const char *name);
 void channel_free(struct channel *channel);
 
 #endif

@@ -15,12 +15,11 @@
 
 #include "fschat.h"
 #include "updater.h"
+#include "api-client.h"
 
 #include "utils/log.h"
 #include "utils/memory.h"
-
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#include "utils/math.h"
 
 #define USERNAME_FILENAME ".username"
 
@@ -48,6 +47,8 @@ static int fs_write(const char *path, const char *buf, size_t size, off_t offset
 static int options_free(struct options *opts);
 
 static struct fschat fschat;
+static struct api_client api_client;
+
 int
 main(int argc, char *argv[])
 {
@@ -75,19 +76,24 @@ main(int argc, char *argv[])
 
     if (fschat_init(&fschat, options.username) != 0)
     {
-        fuse_opt_free_args(&args);
         log_critical("Unable to init channel fschat\n");
         return 1;
     }
 
-    struct channel *channel1 = channel_create("channel2", "");
-    struct channel *channel2 = channel_create("channel1", "");
+    if (api_client_init(&api_client, "http://localhost:3000") != 0)
+    {
+        log_critical("Unable to init api client\n");
+        return 1;
+    }
+
+    struct channel *channel1 = channel_create(1, "tst", "");
+    struct channel *channel2 = channel_create(2, "tadata", "");
     channel1->next = channel2;
     fschat.channels = channel1;
 
     struct updater updater = { 0 };
 
-    if (updater_init(&updater, &fschat) != 0)
+    if (updater_init(&updater, &fschat, &api_client) != 0)
     {
         log_critical("Unable to init updater\n");
         return 1;
@@ -111,6 +117,7 @@ main(int argc, char *argv[])
 
     fschat_free(&fschat);
     options_free(&options);
+    api_client_free(&api_client);
 
     return ret;
 }
@@ -154,15 +161,19 @@ fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
         return 0;
     }
 
-    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
+    fschat_lock_for_reading(&fschat);
+    struct channel *channel = find_channel(&fschat, path + 1);
     if (!channel)
+    {
+        fschat_unlock(&fschat);
         return -ENOENT;
+    }
 
     stbuf->st_mode = __S_IFREG | 0666;
     stbuf->st_nlink = 1;
     stbuf->st_size = channel->contents_len;
 
-    channel_unlock(channel);
+    fschat_unlock(&fschat);
 
     return 0;
 }
@@ -199,12 +210,16 @@ fs_open(const char *path, struct fuse_file_info *fi)
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
         return 0;
 
-    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
+    fschat_lock_for_reading(&fschat);
+    struct channel *channel = find_channel(&fschat, path + 1);
     if (!channel)
+    {
+        fschat_unlock(&fschat);
         return -ENOENT;
+    }
 
     fi->direct_io = 1;
-    channel_unlock(channel);
+    fschat_unlock(&fschat);
 
     return 0;
 }
@@ -228,16 +243,16 @@ fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file
     }
     else
     {
-        struct channel *channel = find_channel_for_reading(&fschat, path + 1);
+        fschat_lock_for_reading(&fschat);
+        struct channel *channel = find_channel(&fschat, path + 1);
         if (channel)
         {
             found = true;
             len = MIN(size, channel->contents_len - offset);
             if (len > 0)
                 memcpy(buf, channel->contents + offset, len);
-
-            channel_unlock(channel);
         }
+        fschat_unlock(&fschat);
     }
 
     if (!found)
@@ -277,13 +292,27 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
         return size;
     }
 
-    struct channel *channel = find_channel_for_reading(&fschat, path + 1);
+    fschat_lock_for_reading(&fschat);
+    struct channel *channel = find_channel(&fschat, path + 1);
     if (!channel)
+    {
+        fschat_unlock(&fschat);
         return -ENOENT;
+    }
 
-    printf("write %ld %ld\n", size, offset);
+    long channel_id = channel->id;
+    fschat_unlock(&fschat);
 
-    channel_unlock(channel);
+    scoped char *username = fschat_copy_username_locked(&fschat);
+    scoped char *message = malloc((cpy_size + 1) * sizeof(char));
+    message[cpy_size] = '\0';
+    memcpy(message, buf, cpy_size);
+    int result = api_message_post(&api_client, channel_id, message, username, "testId");
+    if (result != 0)
+    {
+        log_error("Unable to post message to channel with id '%ld'\n", channel_id);
+        return -EIO;
+    }
 
     return size;
 }

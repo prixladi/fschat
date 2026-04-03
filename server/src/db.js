@@ -11,7 +11,7 @@ db.exec(`
     name TEXT NOT NULL UNIQUE
   );
 
-  CREATE TABLE IF NOT EXISTS message (
+  CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     text TEXT NOT NULL,
     username TEXT NOT NULL,

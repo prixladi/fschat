@@ -41,13 +41,13 @@ api.register(async (fastify) => {
       .get(channelId);
     if (!channel) return reply.code(404).send({ error: 'Channel not found' });
 
-    const { message, username, userId } = req.body;
+    const { text, username, user_id } = req.body;
     const timestamp = Date.now();
     const result = db
       .prepare(
-        'INSERT INTO messages (message, timestamp, username, user_id, channel_id) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO messages (text, timestamp, username, user_id, channel_id) VALUES (?, ?, ?, ?, ?)',
       )
-      .run(message, timestamp, username, userId, channelId);
+      .run(text, timestamp, username, user_id, channelId);
 
     return reply.code(201).send({ id: result.lastInsertRowid });
   });

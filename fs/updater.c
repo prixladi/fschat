@@ -6,15 +6,20 @@
 #include "api-client.h"
 
 #include "utils/memory.h"
+#include "utils/math.h"
 
 static void *channels_update_loop(void *data);
 
 int
-updater_init(struct updater *updater, struct fschat *fschat)
+updater_init(struct updater *updater, struct fschat *fschat, struct api_client *api_client)
 {
-    log_info("Updater initialized\n");
     memset(updater, 0, sizeof(struct updater));
+
     updater->fschat = fschat;
+    updater->api_client = api_client;
+
+    log_info("Updater initialized\n");
+
     return 0;
 }
 
@@ -53,42 +58,81 @@ channels_update_loop(void *data)
 {
     struct updater *updater = data;
     struct fschat *fschat = updater->fschat;
-
-    size_t cnt = 0;
+    struct api_client *api_client = updater->api_client;
 
     while (!updater->exiting)
     {
-        cnt++;
-
-        fschat_lock_for_writing(fschat);
+        fschat_lock_for_reading(fschat);
 
         struct channel *channel = fschat->channels;
         while (channel)
         {
-            scoped char *str = str_printf("[%s-%ld]: Message Message Message Message", fschat->username, cnt);
+            struct channel *next = channel->next;
 
-            channel_lock_for_writing(channel);
+            long channel_id = channel->id;
+            long latest_message_timestamp = channel->latest_message_timestamp;
+
             fschat_unlock(fschat);
 
-            size_t new_len = channel->contents_len + strlen(str);
-            char *new_str = malloc(sizeof(char) * (new_len + 2));
-            if (channel->contents_len)
-                memcpy(new_str, channel->contents, channel->contents_len);
+            struct api_message_list messages;
+            int result = api_messages_list(api_client, channel_id, latest_message_timestamp + 1, &messages);
+            if (result != 0)
+            {
+                log_error("Unable to get messages for channel '%ld', result '%d'\n", channel_id, result);
+                channel = next;
+                fschat_lock_for_reading(fschat);
+                continue;
+            }
 
-            memcpy(new_str + channel->contents_len, str, strlen(str));
-            new_str[new_len] = '\n';
-            new_str[new_len + 1] = '\0';
+            if (!messages.count)
+            {
+                api_message_list_free(&messages);
+                channel = next;
+                fschat_lock_for_reading(fschat);
+                continue;
+            }
 
-            free(channel->contents);
-            channel->contents = new_str;
-            channel->contents_len = new_len + 1;
+            log_debug("'%d' new messages for channel '%ld'", messages.count, channel_id);
+
+            char **lines = malloc(sizeof(char *) * messages.count);
+            long new_latest_message_timestamp = latest_message_timestamp;
+
+            size_t total_len = 0;
+            for (int i = 0; i < messages.count; i++)
+            {
+                struct api_message *m = messages.items + i;
+                new_latest_message_timestamp = MAX(new_latest_message_timestamp, m->timestamp);
+                lines[i] = str_printf("[%s/%s) | %ld]: %s\n", m->username, m->user_id, m->timestamp, m->text);
+                total_len += strlen(lines[i]);
+            }
+
+            scoped char *full = malloc(sizeof(char) * (total_len + 1));
+            full[total_len] = '\0';
+
+            size_t cursor = 0;
+            for (int i = 0; i < messages.count; i++)
+            {
+                scoped char *line = lines[i];
+                size_t len = strlen(line);
+                memcpy(full + cursor, line, len);
+                cursor += len;
+            }
+            free(lines);
+            api_message_list_free(&messages);
 
             fschat_lock_for_writing(fschat);
-            struct channel *next = channel->next;
-            channel_unlock(channel);
+
+            char *new_content = str_concat(channel->contents, full);
+            free(channel->contents);
+            channel->contents = new_content;
+            channel->latest_message_timestamp = new_latest_message_timestamp;
+            channel->contents_len = strlen(new_content);
+
+            fschat_unlock(fschat);
+
+            fschat_lock_for_reading(fschat);
             channel = next;
         };
-
         fschat_unlock(fschat);
 
         sleep(1);
