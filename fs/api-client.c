@@ -47,9 +47,7 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
     scoped char *body = raw_request("GET", url, NULL, &status);
 
     if (!body || status != 200)
-    {
         return status != 0 ? status : -1;
-    }
 
     cJSON *root = cJSON_Parse(body);
     if (!cJSON_IsArray(root))
@@ -72,8 +70,7 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
             return -1002;
         }
         struct api_channel channel = { 0 };
-        int res = parse_channel(item, &channel);
-        if (res != 0)
+        if (parse_channel(item, &channel) != 0)
         {
             api_channel_list_free(list);
             cJSON_Delete(root);
@@ -87,8 +84,11 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
     return 0;
 }
 int
-api_channel_create(const struct api_client *client, const char *name)
+api_channel_create(const struct api_client *client, const char *name, struct api_channel *channel)
 {
+    if (channel != NULL)
+        memset(channel, 0, sizeof(struct api_channel));
+
     cJSON *req = cJSON_CreateObject();
     cJSON_AddStringToObject(req, "name", name);
     scoped char *body_str = cJSON_PrintUnformatted(req);
@@ -97,9 +97,20 @@ api_channel_create(const struct api_client *client, const char *name)
     long status;
     scoped char *url = str_printf("%s/channels", client->base_url);
     scoped char *body = raw_request("POST", url, body_str, &status);
-
-    if (status != 201)
+    if (!body || status != 201)
         return status != 0 ? status : -1;
+
+    if (channel != NULL)
+    {
+        cJSON *root = cJSON_Parse(body);
+        if (parse_channel(root, channel) != 0)
+        {
+            cJSON_Delete(root);
+            return -1003;
+        }
+
+        cJSON_Delete(root);
+    }
 
     return 0;
 }
@@ -151,9 +162,7 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
         url = str_printf("%s/channels/%ld/messages", client->base_url, channel_id);
     scoped char *body = raw_request("GET", url, NULL, &status);
     if (!body || status != 200)
-    {
         return status != 0 ? status : -1;
-    }
 
     cJSON *root = cJSON_Parse(body);
     if (!cJSON_IsArray(root))
@@ -176,8 +185,7 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
             return -1002;
         }
         struct api_message message = { 0 };
-        int res = parse_message(item, &message);
-        if (res != 0)
+        if (parse_message(item, &message) != 0)
         {
             api_message_list_free(list);
             cJSON_Delete(root);

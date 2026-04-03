@@ -76,7 +76,7 @@ fschat_free(struct fschat *fschat)
     for (int i = 0; i < fschat->channel_count; i++)
     {
         struct channel *curr = fschat->channels[i];
-        channel_free(curr);
+        fschat_channel_free(curr);
     }
     free(fschat->channels);
     fschat->channel_count = 0;
@@ -96,7 +96,7 @@ fschat_free(struct fschat *fschat)
 }
 
 struct channel *
-channel_create(long id, const char *name)
+fschat_channel_create(long id, const char *name)
 {
     struct channel *channel = calloc(1, sizeof(struct channel));
 
@@ -109,7 +109,7 @@ channel_create(long id, const char *name)
 }
 
 struct channel *
-channel_find_by_name(struct fschat *fschat, const char *name)
+fschat_channel_find_by_name(struct fschat *fschat, const char *name)
 {
     for (int i = 0; i < fschat->channel_count; i++)
     {
@@ -121,7 +121,7 @@ channel_find_by_name(struct fschat *fschat, const char *name)
 }
 
 struct channel *
-channel_find_by_id(struct fschat *fschat, long id)
+fschat_channel_find_by_id(struct fschat *fschat, long id)
 {
     for (int i = 0; i < fschat->channel_count; i++)
     {
@@ -134,7 +134,7 @@ channel_find_by_id(struct fschat *fschat, long id)
 
 const size_t channel_p_size = sizeof(struct channel *);
 int
-channel_remove_at(struct fschat *fschat, int pos)
+fschat_channel_remove_at(struct fschat *fschat, int pos)
 {
     if (pos < 0 || !fschat->channel_count || pos >= fschat->channel_count)
         return -1;
@@ -147,7 +147,7 @@ channel_remove_at(struct fschat *fschat, int pos)
     if (pos + 1 < fschat->channel_count)
         memcpy(new_channels + pos, fschat->channels + pos + 1, channel_p_size * (fschat->channel_count - pos));
 
-    channel_free(fschat->channels[pos]);
+    fschat_channel_free(fschat->channels[pos]);
     free(fschat->channels);
     fschat->channels = new_channels;
     fschat->channel_count = new_size;
@@ -156,7 +156,7 @@ channel_remove_at(struct fschat *fschat, int pos)
 }
 
 int
-channel_add(struct fschat *fschat, struct channel *channel)
+fschat_channel_add(struct fschat *fschat, struct channel *channel)
 {
     int new_size = fschat->channel_count + 1;
     struct channel **new_channels = malloc(channel_p_size * new_size);
@@ -174,7 +174,7 @@ channel_add(struct fschat *fschat, struct channel *channel)
 }
 
 void
-channel_free(struct channel *channel)
+fschat_channel_free(struct channel *channel)
 {
     free(channel->name);
     free(channel->contents);

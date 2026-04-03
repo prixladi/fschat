@@ -30,12 +30,12 @@ void fschat_free(struct fschat *fschat);
 char *fschat_copy_username_locked(struct fschat *fschat);
 int fschat_replace_username_locked(struct fschat *fschat, char *username);
 
-struct channel *channel_create(long id, const char *name);
-struct channel *channel_find_by_name(struct fschat *fschat, const char *name);
-struct channel *channel_find_by_id(struct fschat *fschat, long id);
-int channel_add(struct fschat *fschat, struct channel *channel);
-int channel_remove_at(struct fschat *fschat, int pos);
-void channel_free(struct channel *channel);
+struct channel *fschat_channel_create(long id, const char *name);
+struct channel *fschat_channel_find_by_name(struct fschat *fschat, const char *name);
+struct channel *fschat_channel_find_by_id(struct fschat *fschat, long id);
+int fschat_channel_add(struct fschat *fschat, struct channel *channel);
+int fschat_channel_remove_at(struct fschat *fschat, int pos);
+void fschat_channel_free(struct channel *channel);
 
 int fschat_lock_for_reading(struct fschat *fschat);
 int fschat_lock_for_writing(struct fschat *fschat);

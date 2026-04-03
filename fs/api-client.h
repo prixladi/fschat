@@ -8,8 +8,8 @@ struct api_client
 
 struct api_channel
 {
-    long id; 
-    char *name; 
+    long id;
+    char *name;
 };
 
 struct api_channel_list
@@ -38,7 +38,7 @@ int api_client_init(struct api_client *client, const char *base_url);
 void api_client_free(struct api_client *client);
 
 int api_channels_list(const struct api_client *client, struct api_channel_list *list);
-int api_channel_create(const struct api_client *client, const char *name);
+int api_channel_create(const struct api_client *client, const char *name, struct api_channel *channel);
 int api_channel_delete(const struct api_client *client, long channel_id);
 int api_message_post(const struct api_client *client, long channel_id, const char *text, const char *username,
                      const char *user_id);

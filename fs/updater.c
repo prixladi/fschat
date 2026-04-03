@@ -84,8 +84,8 @@ channels_update_loop2(void *data)
             int j = 0;
             for (; j < fschat->channel_count;)
             {
-                if (strcmp(fschat->channels[i]->name, api_channels.items[i].name) == 0 &&
-                    fschat->channels[i]->id == api_channels.items[i].id)
+                if (strcmp(fschat->channels[j]->name, api_channels.items[i].name) == 0 &&
+                    fschat->channels[j]->id == api_channels.items[i].id)
                     break;
                 j++;
             }
@@ -131,7 +131,7 @@ channels_update_loop2(void *data)
 
                 if (j >= api_channels.count)
                 {
-                    channel_remove_at(fschat, i);
+                    fschat_channel_remove_at(fschat, i);
                     log_info("Removed channel %s with id %ld\n", channel->name, channel->id);
                     removed++;
                 }
@@ -152,8 +152,8 @@ channels_update_loop2(void *data)
 
                 if (i >= fschat->channel_count)
                 {
-                    struct channel *channel = channel_create(api_channel->id, api_channel->name);
-                    channel_add(fschat, channel);
+                    struct channel *channel = fschat_channel_create(api_channel->id, api_channel->name);
+                    fschat_channel_add(fschat, channel);
                     log_info("Added channel %s with id %ld\n", channel->name, channel->id);
                     added++;
                 }
@@ -214,7 +214,7 @@ channels_update_loop(void *data)
                 continue;
             }
 
-            log_debug("'%d' new messages for channel '%ld'\n", messages.count, channel_id);
+            log_debug("Received '%d' new messages for channel '%ld'\n", messages.count, channel_id);
 
             char **lines = malloc(sizeof(char *) * messages.count);
             long new_latest_message_timestamp = latest_message_timestamp;
@@ -246,7 +246,7 @@ channels_update_loop(void *data)
 
             // Need to find the channel again because it is possible it got removed
             // TODO: Optimization - add starting index here because it should almost always be on the same spot
-            channel = channel_find_by_id(fschat, channel_id);
+            channel = fschat_channel_find_by_id(fschat, channel_id);
             if (channel)
             {
                 char *new_content = str_concat(channel->contents, full);

@@ -45,6 +45,7 @@ static int fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t
 static int fs_open(const char *path, struct fuse_file_info *fi);
 static int fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
+static int fs_mknod(const char *path, mode_t mode, dev_t dev);
 
 static int options_free(struct options *opts);
 
@@ -101,9 +102,13 @@ main(int argc, char *argv[])
         return 1;
     }
 
-    struct fuse_operations oper = {
-        .init = fs_init, .getattr = fs_getattr, .readdir = fs_readdir, .open = fs_open, .read = fs_read, .write = fs_write
-    };
+    struct fuse_operations oper = { .init = fs_init,
+                                    .getattr = fs_getattr,
+                                    .readdir = fs_readdir,
+                                    .open = fs_open,
+                                    .read = fs_read,
+                                    .write = fs_write,
+                                    .mknod = fs_mknod };
 
     log_info("FUSE starting\n");
     int ret = fuse_main(args.argc, args.argv, &oper, NULL);
@@ -159,7 +164,7 @@ fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
     }
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = channel_find_by_name(&fschat, path + 1);
+    struct channel *channel = fschat_channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);
@@ -207,7 +212,7 @@ fs_open(const char *path, struct fuse_file_info *fi)
         return 0;
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = channel_find_by_name(&fschat, path + 1);
+    struct channel *channel = fschat_channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);
@@ -240,7 +245,7 @@ fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file
     else
     {
         fschat_lock_for_reading(&fschat);
-        struct channel *channel = channel_find_by_name(&fschat, path + 1);
+        struct channel *channel = fschat_channel_find_by_name(&fschat, path + 1);
         if (channel)
         {
             found = true;
@@ -295,7 +300,7 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
     }
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = channel_find_by_name(&fschat, path + 1);
+    struct channel *channel = fschat_channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);
@@ -317,6 +322,56 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
     }
 
     return size;
+}
+
+static int
+fs_mknod(const char *path, mode_t mode, dev_t dev)
+{
+    (void)mode;
+    (void)dev;
+
+    char *channel_name = (char *)path + 1;
+
+    if (fschat_channel_find_by_name(&fschat, channel_name) != NULL)
+        log_error("Unable to create channel %s because it already exists\n", channel_name);
+
+    struct api_channel api_channel = { 0 };
+    int result = api_channel_create(&api_client, channel_name, &api_channel);
+    if (result != 0)
+    {
+        if (result < -1000)
+            log_error(
+                "Unable to parse create channel (%s) response, channel was probably create but it might appear with delay.",
+                channel_name);
+        else
+            log_error("Unable to create channel (%s), result %d\n", channel_name, result);
+        return -EIO;
+    }
+
+    fschat_lock_for_writing(&fschat);
+
+    int i = 0;
+    for (; i < fschat.channel_count;)
+    {
+        if (fschat.channels[i]->id == api_channel.id)
+            break;
+        i++;
+    }
+
+    // There is a chance that updater already synchronized server state to the fschat store.
+    // Note that we can't just wait for updater because caller can try open the file instantly after creating it and it would fail
+    if (i == fschat.channel_count)
+    {
+        struct channel *channel = fschat_channel_create(api_channel.id, api_channel.name);
+        fschat_channel_add(&fschat, channel);
+    }
+
+    fschat_unlock(&fschat);
+
+    log_info("Created channel '%s' with id %ld\n", api_channel.name, api_channel.id);
+
+    api_channel_free(&api_channel);
+    return 0;
 }
 
 static int
