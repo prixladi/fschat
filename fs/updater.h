@@ -12,6 +12,7 @@ struct updater
     struct fschat *fschat;
     struct api_client *api_client;
     pthread_t tid;
+    pthread_t tid2;
     bool exiting;
 };
 

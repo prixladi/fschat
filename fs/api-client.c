@@ -52,27 +52,35 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
     }
 
     cJSON *root = cJSON_Parse(body);
-
     if (!cJSON_IsArray(root))
     {
         cJSON_Delete(root);
-        return -1;
+        return -1001;
     }
 
     int len = cJSON_GetArraySize(root);
     list->items = calloc(len, sizeof(struct api_channel));
     list->count = len;
 
-    cJSON *item = root;
+    cJSON *item = root->child;
     for (int i = 0; i < len; i++)
     {
         if (!item)
-            return -1;
+        {
+            api_channel_list_free(list);
+            cJSON_Delete(root);
+            return -1002;
+        }
         struct api_channel channel = { 0 };
         int res = parse_channel(item, &channel);
         if (res != 0)
-            return -1;
+        {
+            api_channel_list_free(list);
+            cJSON_Delete(root);
+            return -1003;
+        }
         list->items[i] = channel;
+        item = item->next;
     }
 
     cJSON_Delete(root);
@@ -148,11 +156,10 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
     }
 
     cJSON *root = cJSON_Parse(body);
-
     if (!cJSON_IsArray(root))
     {
         cJSON_Delete(root);
-        return -1;
+        return -1001;
     }
 
     int len = cJSON_GetArraySize(root);
@@ -163,13 +170,18 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
     for (int i = 0; i < len; i++)
     {
         if (!item)
-            return -1;
+        {
+            api_message_list_free(list);
+            cJSON_Delete(root);
+            return -1002;
+        }
         struct api_message message = { 0 };
         int res = parse_message(item, &message);
         if (res != 0)
         {
+            api_message_list_free(list);
             cJSON_Delete(root);
-            return -1;
+            return -1003;
         }
         list->items[i] = message;
         item = item->next;

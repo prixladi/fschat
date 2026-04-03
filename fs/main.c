@@ -23,6 +23,8 @@
 
 #define USERNAME_FILENAME ".username"
 
+#define MAX_WRITE_SIZE 64
+
 #define OPTION(t, p) { t, offsetof(struct options, p), 1 }
 
 static struct options
@@ -85,11 +87,6 @@ main(int argc, char *argv[])
         log_critical("Unable to init api client\n");
         return 1;
     }
-
-    struct channel *channel1 = channel_create(1, "tst", "");
-    struct channel *channel2 = channel_create(2, "tadata", "");
-    channel1->next = channel2;
-    fschat.channels = channel1;
 
     struct updater updater = { 0 };
 
@@ -162,7 +159,7 @@ fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
     }
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = find_channel(&fschat, path + 1);
+    struct channel *channel = channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);
@@ -194,12 +191,11 @@ fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, st
 
     filler(buf, USERNAME_FILENAME, NULL, 0, FUSE_FILL_DIR_PLUS);
 
-    struct channel *cursor = fschat.channels;
-    while (cursor)
+    for (int i = 0; i < fschat.channel_count; i++)
     {
-        filler(buf, cursor->name, NULL, 0, FUSE_FILL_DIR_PLUS);
-        cursor = cursor->next;
-    };
+        struct channel *curr = fschat.channels[i];
+        filler(buf, curr->name, NULL, 0, FUSE_FILL_DIR_PLUS);
+    }
 
     return 0;
 }
@@ -211,7 +207,7 @@ fs_open(const char *path, struct fuse_file_info *fi)
         return 0;
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = find_channel(&fschat, path + 1);
+    struct channel *channel = channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);
@@ -244,7 +240,7 @@ fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file
     else
     {
         fschat_lock_for_reading(&fschat);
-        struct channel *channel = find_channel(&fschat, path + 1);
+        struct channel *channel = channel_find_by_name(&fschat, path + 1);
         if (channel)
         {
             found = true;
@@ -274,6 +270,12 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
         return -EIO;
     }
 
+    if (size > MAX_WRITE_SIZE)
+    {
+        log_error("Max write size exceeded, path - %s, size - %ld, max - %d", path, size, MAX_WRITE_SIZE);
+        return -EIO;
+    }
+
     size_t cpy_size = size;
     // Trim the trailing \n for usages such as `echo "Hey" > fschat/channel`
     while (cpy_size > 0 && buf[cpy_size - 1] == '\n')
@@ -293,7 +295,7 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
     }
 
     fschat_lock_for_reading(&fschat);
-    struct channel *channel = find_channel(&fschat, path + 1);
+    struct channel *channel = channel_find_by_name(&fschat, path + 1);
     if (!channel)
     {
         fschat_unlock(&fschat);

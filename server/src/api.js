@@ -4,7 +4,7 @@ const api = require('fastify')({ logger: true });
 api.register(async (fastify) => {
   fastify.get('/channels', (_, reply) => {
     const result = db.prepare('SELECT * FROM channels').all();
-    return reply.code(200).send({ result });
+    return reply.code(200).send(result);
   });
 
   fastify.post('/channels', (req, reply) => {

@@ -6,7 +6,7 @@ HEADERS = fs/*.h fs/utils/*.h fs/external/*.h
 .PHONY: build install run
 
 setup: 
-	mkdir -p chat && mkdir -p build
+	mkdir -p chat && mkdir -p chat2 && mkdir -p build
 
 build: FLAGS += -O2
 build: setup
@@ -14,6 +14,9 @@ build: setup
 
 run: build
 	./build/fschat -f "./chat"
+
+run2: build
+	./build/fschat -f "./chat2"
 
 build_debug_address: FLAGS += -fsanitize=undefined,address -g -D __DEBUG__
 build_debug_address: setup
