@@ -29,18 +29,22 @@ static int fs_open(const char *path, struct fuse_file_info *fi);
 static int fs_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi);
 static int fs_mknod(const char *path, mode_t mode, dev_t dev);
+static int fs_unlink(const char *path);
 
 struct fuse_operations
 fschat_get_fuse_operations(struct fschat *fschat)
 {
     (void)fschat;
-    struct fuse_operations oper = { .init = fs_init,
-                                    .getattr = fs_getattr,
-                                    .readdir = fs_readdir,
-                                    .open = fs_open,
-                                    .read = fs_read,
-                                    .write = fs_write,
-                                    .mknod = fs_mknod };
+    struct fuse_operations oper = {
+        .init = fs_init,
+        .getattr = fs_getattr,
+        .readdir = fs_readdir,
+        .open = fs_open,
+        .read = fs_read,
+        .write = fs_write,
+        .mknod = fs_mknod,
+        .unlink = fs_unlink,
+    };
 
     return oper;
 }
@@ -116,11 +120,15 @@ fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, st
 
     filler(buf, USERNAME_FILENAME, NULL, 0, FUSE_FILL_DIR_PLUS);
 
+    fschat_lock_for_reading(fschat);
+
     for (int i = 0; i < fschat->channel_count; i++)
     {
         struct fschat_channel *curr = fschat->channels[i];
         filler(buf, curr->name, NULL, 0, FUSE_FILL_DIR_PLUS);
     }
+
+    fschat_unlock(fschat);
 
     return 0;
 }
@@ -256,7 +264,10 @@ fs_mknod(const char *path, mode_t mode, dev_t dev)
     char *channel_name = (char *)path + 1;
 
     if (fschat_channel_find_by_name(fschat, channel_name) != NULL)
+    {
         log_error("Unable to create channel %s because it already exists\n", channel_name);
+        return -EIO;
+    }
 
     struct api_channel api_channel = { 0 };
     int result = api_channel_create(fschat->api_client, channel_name, &api_channel);
@@ -264,10 +275,10 @@ fs_mknod(const char *path, mode_t mode, dev_t dev)
     {
         if (result < -1000)
             log_error(
-                "Unable to parse create channel (%s) response, channel was probably create but it might appear with delay.",
+                "Unable to parse create channel (%s) server  response, channel was probably create but it might appear with delay.",
                 channel_name);
         else
-            log_error("Unable to create channel (%s), result %d\n", channel_name, result);
+            log_error("Unable to create channel (%s) on the server, result %d\n", channel_name, result);
         return -EIO;
     }
 
@@ -294,5 +305,47 @@ fs_mknod(const char *path, mode_t mode, dev_t dev)
     log_info("Created channel '%s' with id %ld\n", api_channel.name, api_channel.id);
 
     api_channel_free(&api_channel);
+    return 0;
+}
+
+static int
+fs_unlink(const char *path)
+{
+    struct fschat *fschat = get_fschat();
+
+    char *channel_name = (char *)path + 1;
+
+    struct fschat_channel *channel = fschat_channel_find_by_name(fschat, channel_name);
+    if (!channel)
+    {
+        log_error("Unable to remove channel '%s' because it was not found\n", channel_name);
+        return -EIO;
+    }
+    long channel_id = channel->id;
+
+    int api_result = api_channel_delete(fschat->api_client, channel->id);
+    if (api_result != 0)
+    {
+        log_error("Unable to remove channel from the server '%s', result %d\n", channel_name, api_result);
+        return -EIO;
+    }
+
+    fschat_lock_for_writing(fschat);
+
+    for (int i = 0; i < fschat->channel_count; i++)
+    {
+        struct fschat_channel *curr = fschat->channels[i];
+        if (strcmp(channel_name, curr->name) == 0)
+        {
+            fschat_channel_remove_at(fschat, i);
+            break;
+        }
+    }
+    // We dont need to check if channel was found because the update thread might have already synced the state
+
+    fschat_unlock(fschat);
+
+    log_info("Removed channel '%s' with id %ld\n", channel_name, channel_id);
+
     return 0;
 }

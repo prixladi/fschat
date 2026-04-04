@@ -163,37 +163,32 @@ channels_sync_loop(void *data)
         bool matching = true;
         for (int i = 0; i < api_channels.count && matching; i++)
         {
-            int j = 0;
-            for (; j < fschat->channel_count;)
+            bool found = false;
+            for (int j = 0; j < fschat->channel_count && !found; j++)
             {
-                if (strcmp(fschat->channels[j]->name, api_channels.items[i].name) == 0 &&
-                    fschat->channels[j]->id == api_channels.items[i].id)
-                    break;
-                j++;
+                found = fschat->channels[j]->id == api_channels.items[i].id &&
+                        strcmp(fschat->channels[j]->name, api_channels.items[i].name) == 0;
             }
-            matching = j < fschat->channel_count;
+            matching = found;
         }
 
         for (int j = 0; j < fschat->channel_count && matching; j++)
         {
-            int i = 0;
-            for (; i < api_channels.count && matching;)
+            bool found = false;
+            for (int i = 0; i < api_channels.count && !found; i++)
             {
-                if (strcmp(fschat->channels[i]->name, api_channels.items[i].name) == 0 &&
-                    fschat->channels[i]->id == api_channels.items[i].id)
-                    break;
-                i++;
+                found = fschat->channels[j]->id == api_channels.items[i].id &&
+                        strcmp(fschat->channels[j]->name, api_channels.items[i].name) == 0;
             }
-            matching = i < api_channels.count;
+            matching = found;
         }
 
         fschat_unlock(fschat);
 
         if (!matching)
         {
-            fschat_lock_for_writing(fschat);
-
             log_info("Channels are not matching, proceeding with update\n");
+            fschat_lock_for_writing(fschat);
 
             int added = 0;
             int renamed = 0;
@@ -213,9 +208,10 @@ channels_sync_loop(void *data)
 
                 if (j >= api_channels.count)
                 {
+                    log_info("Removed channel '%s' with id '%ld'\n", channel->name, channel->id);
                     fschat_channel_remove_at(fschat, i);
-                    log_info("Removed channel %s with id %ld\n", channel->name, channel->id);
                     removed++;
+                    i--;
                 }
             }
 
@@ -275,6 +271,7 @@ messages_sync_loop(void *data)
             struct fschat_channel *channel = fschat->channels[i];
 
             long channel_id = channel->id;
+            scoped char *channel_name = str_dup(channel->name);
             long latest_message_timestamp = channel->latest_message_timestamp;
 
             fschat_unlock(fschat);
@@ -295,7 +292,8 @@ messages_sync_loop(void *data)
                 continue;
             }
 
-            log_debug("Received '%d' new messages for channel '%ld'\n", messages.count, channel_id);
+            log_debug("Received '%d' new messages for channel '%s' with id '%ld'\n", messages.count, channel_name,
+                      channel_id);
 
             char **lines = malloc(sizeof(char *) * messages.count);
             long new_latest_message_timestamp = latest_message_timestamp;
@@ -453,7 +451,7 @@ fschat_channel_remove_at(struct fschat *fschat, int pos)
     if (pos > 0)
         memcpy(new_channels, fschat->channels, channel_p_size * pos);
     if (pos + 1 < fschat->channel_count)
-        memcpy(new_channels + pos, fschat->channels + pos + 1, channel_p_size * (fschat->channel_count - pos));
+        memcpy(new_channels + pos, fschat->channels + pos + 1, channel_p_size * (fschat->channel_count - pos - 1));
 
     fschat_channel_free(fschat->channels[pos]);
     free(fschat->channels);
