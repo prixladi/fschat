@@ -7,8 +7,34 @@
 #define __USE_XOPEN2K
 #endif
 #include <pthread.h>
+#include <stdbool.h>
 
-struct channel
+#include "api-client.h"
+
+struct fschat
+{
+    pthread_rwlock_t *lock;
+
+    char *username;
+
+    struct fschat_channel **channels;
+    int channel_count;
+
+    struct api_client *api_client;
+
+    pthread_t channels_sync_tid;
+    pthread_t messages_sync_tid;
+
+    bool stopped;
+};
+
+struct fschat_options
+{
+    char *default_username;
+    char *api_base_url;
+};
+
+struct fschat_channel
 {
     long id;
     char *name;
@@ -17,25 +43,22 @@ struct channel
     long latest_message_timestamp;
 };
 
-struct fschat
-{
-    pthread_rwlock_t *lock;
-    char *username;
-    struct channel **channels;
-    int channel_count;
-};
-
-int fschat_init(struct fschat *fschat, const char *username);
+int fschat_init(struct fschat *fschat, struct fschat_options *options);
+int fschat_start(struct fschat *fschat);
+int fschat_stop(struct fschat *fschat);
 void fschat_free(struct fschat *fschat);
+
+// Semi-internal APIs, should be used only internally or in fschat-fuse
+
 char *fschat_copy_username_locked(struct fschat *fschat);
 int fschat_replace_username_locked(struct fschat *fschat, char *username);
 
-struct channel *fschat_channel_create(long id, const char *name);
-struct channel *fschat_channel_find_by_name(struct fschat *fschat, const char *name);
-struct channel *fschat_channel_find_by_id(struct fschat *fschat, long id);
-int fschat_channel_add(struct fschat *fschat, struct channel *channel);
+struct fschat_channel *fschat_channel_create(long id, const char *name);
+struct fschat_channel *fschat_channel_find_by_name(struct fschat *fschat, const char *name);
+struct fschat_channel *fschat_channel_find_by_id(struct fschat *fschat, long id);
+int fschat_channel_add(struct fschat *fschat, struct fschat_channel *channel);
 int fschat_channel_remove_at(struct fschat *fschat, int pos);
-void fschat_channel_free(struct channel *channel);
+void fschat_channel_free(struct fschat_channel *channel);
 
 int fschat_lock_for_reading(struct fschat *fschat);
 int fschat_lock_for_writing(struct fschat *fschat);

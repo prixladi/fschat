@@ -1,5 +1,5 @@
-#ifndef api_client__H
-#define api_client__H
+#ifndef API_CLIENT__H
+#define API_CLIENT__H
 
 struct api_client
 {
