@@ -1,5 +1,5 @@
-#ifndef fschat__H
-#define fschat__H
+#ifndef FSCHAT__H
+#define FSCHAT__H
 
 #include <stddef.h>
 

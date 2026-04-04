@@ -47,7 +47,7 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
     scoped char *body = raw_request("GET", url, NULL, &status);
 
     if (!body || status != 200)
-        return status != 0 ? status : -1;
+        return status != 0 ? -status : -1;
 
     cJSON *root = cJSON_Parse(body);
     if (!cJSON_IsArray(root))
@@ -70,11 +70,12 @@ api_channels_list(const struct api_client *client, struct api_channel_list *list
             return -1002;
         }
         struct api_channel channel = { 0 };
-        if (parse_channel(item, &channel) != 0)
+        int result = parse_channel(item, &channel);
+        if (result != 0)
         {
             api_channel_list_free(list);
             cJSON_Delete(root);
-            return -1003;
+            return result;
         }
         list->items[i] = channel;
         item = item->next;
@@ -98,15 +99,16 @@ api_channel_create(const struct api_client *client, const char *name, struct api
     scoped char *url = str_printf("%s/channels", client->base_url);
     scoped char *body = raw_request("POST", url, body_str, &status);
     if (!body || status != 201)
-        return status != 0 ? status : -1;
+        return status != 0 ? -status : -1;
 
     if (channel != NULL)
     {
         cJSON *root = cJSON_Parse(body);
-        if (parse_channel(root, channel) != 0)
+        int result = parse_channel(root, channel);
+        if (result != 0)
         {
             cJSON_Delete(root);
-            return -1003;
+            return result;
         }
 
         cJSON_Delete(root);
@@ -123,7 +125,7 @@ api_channel_delete(const struct api_client *client, long channel_id)
     scoped char *body = raw_request("DELETE", url, NULL, &status);
 
     if (status != 204)
-        return status != 0 ? status : -1;
+        return status != 0 ? -status : -1;
 
     return 0;
 }
@@ -144,7 +146,7 @@ api_message_post(const struct api_client *client, long channel_id, const char *t
     scoped char *body = raw_request("POST", url, body_str, &status);
 
     if (status != 201)
-        return status != 0 ? status : -1;
+        return status != 0 ? -status : -1;
 
     return 0;
 }
@@ -162,7 +164,7 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
         url = str_printf("%s/channels/%ld/messages", client->base_url, channel_id);
     scoped char *body = raw_request("GET", url, NULL, &status);
     if (!body || status != 200)
-        return status != 0 ? status : -1;
+        return status != 0 ? -status : -1;
 
     cJSON *root = cJSON_Parse(body);
     if (!cJSON_IsArray(root))
@@ -185,11 +187,12 @@ api_messages_list(const struct api_client *client, long channel_id, long since_m
             return -1002;
         }
         struct api_message message = { 0 };
-        if (parse_message(item, &message) != 0)
+        int result = parse_message(item, &message);
+        if (result != 0)
         {
             api_message_list_free(list);
             cJSON_Delete(root);
-            return -1003;
+            return result;
         }
         list->items[i] = message;
         item = item->next;
@@ -299,7 +302,7 @@ parse_channel(const cJSON *obj, struct api_channel *channel)
 {
     memset(channel, 0, sizeof(struct api_channel));
     if (!cJSON_IsObject(obj))
-        return -1;
+        return -2001;
 
     cJSON *id = cJSON_GetObjectItemCaseSensitive(obj, "id");
     cJSON *name = cJSON_GetObjectItemCaseSensitive(obj, "name");
@@ -307,12 +310,11 @@ parse_channel(const cJSON *obj, struct api_channel *channel)
     if (cJSON_IsNumber(id))
         channel->id = (long)id->valuedouble;
     else
-        return -1;
-
+        return -2002;
     if (cJSON_IsString(name) && name->valuestring)
         channel->name = strdup(name->valuestring);
     else
-        return -1;
+        return -2003;
 
     return 0;
 }
@@ -323,7 +325,7 @@ parse_message(const cJSON *obj, struct api_message *message)
     memset(message, 0, sizeof(struct api_message));
     if (!cJSON_IsObject(obj))
     {
-        return -1;
+        return -2001;
     }
 
     cJSON *id = cJSON_GetObjectItemCaseSensitive(obj, "id");
@@ -336,39 +338,27 @@ parse_message(const cJSON *obj, struct api_message *message)
     if (cJSON_IsNumber(id))
         message->id = (long)id->valuedouble;
     else
-    {
-        return -1;
-    }
+        return -2002;
     if (cJSON_IsString(text) && text->valuestring)
         message->text = strdup(text->valuestring);
     else
-    {
-        return -1;
-    }
+        return -2003;
     if (cJSON_IsString(username) && username->valuestring)
         message->username = strdup(username->valuestring);
     else
-    {
-        return -1;
-    }
+        return -2004;
     if (cJSON_IsString(user_id) && user_id->valuestring)
         message->user_id = strdup(user_id->valuestring);
     else
-    {
-        return -1;
-    }
+        return -2005;
     if (cJSON_IsNumber(timestamp))
         message->timestamp = (long)timestamp->valuedouble;
     else
-    {
-        return -1;
-    }
+        return -2006;
     if (cJSON_IsNumber(channel_id))
         message->channel_id = (long)channel_id->valuedouble;
     else
-    {
-        return -1;
-    }
+        return -2007;
 
     return 0;
 }

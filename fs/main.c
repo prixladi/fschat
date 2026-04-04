@@ -49,7 +49,7 @@ main(int argc, char *argv[])
     options.username = strdup(getlogin());
 
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
+    if (fuse_opt_parse(&args, &options, option_spec, NULL) != 0)
     {
         log_critical("Unable to parse args\n");
         return 1;
@@ -72,13 +72,13 @@ main(int argc, char *argv[])
     if (fschat_init(&fschat, &fschat_options) != 0)
     {
         log_critical("Unable to init fschat\n");
-        return 1;
+        return 2;
     }
 
     if (fschat_start(&fschat) != 0)
     {
         log_critical("Unable to start fschat\n");
-        return 1;
+        return 3;
     }
 
     struct fuse_operations oper = fschat_get_fuse_operations(&fschat);

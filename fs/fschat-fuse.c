@@ -201,13 +201,13 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
 
     if (offset)
     {
-        log_error("Offset during write is not allowed, path - %s", path);
+        log_error("Offset during write is not allowed, path - %s\n", path);
         return -EIO;
     }
 
     if (size > MAX_WRITE_SIZE)
     {
-        log_error("Max write size exceeded, path - %s, size - %ld, max - %d", path, size, MAX_WRITE_SIZE);
+        log_error("Max write size exceeded, path - %s, size - %ld, max - %d\n", path, size, MAX_WRITE_SIZE);
         return -EIO;
     }
 

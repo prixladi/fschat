@@ -33,7 +33,7 @@ fschat_init(struct fschat *fschat, struct fschat_options *options)
     if (!options->api_base_url)
     {
         log_error("Missing api base url in fschat init options\n");
-        return -1;
+        return -2;
     }
 
     fschat->lock = malloc(sizeof(pthread_rwlock_t));
@@ -42,7 +42,7 @@ fschat_init(struct fschat *fschat, struct fschat_options *options)
         log_error("Unable to init channels lock\n");
         free(fschat->lock);
         fschat->lock = NULL;
-        return 1;
+        return -3;
     }
     fschat->username = str_dup(options->default_username);
 
@@ -50,7 +50,7 @@ fschat_init(struct fschat *fschat, struct fschat_options *options)
     if (api_client_init(api_client, options->api_base_url) != 0)
     {
         log_error("Unable to init api client\n");
-        return -1;
+        return -4;
     }
 
     fschat->api_client = api_client;
