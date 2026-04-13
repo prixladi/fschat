@@ -118,7 +118,7 @@ init_channels(struct fschat *fschat)
 
     if (api_channels.count < 1)
     {
-        log_info("No channels found during initialization");
+        log_info("No channels found during initialization\n");
         api_channel_list_free(&api_channels);
         return 0;
     }

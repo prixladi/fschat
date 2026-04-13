@@ -1,3 +1,5 @@
 # FSchat
 
-Chat mapped onto filesystem in Userspace.
+Chat mapped onto Filesystem in Userspace.
+
+WIP

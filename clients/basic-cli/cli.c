@@ -167,7 +167,7 @@ read_file_follow(const char *path)
     while ((n = read(fd, read_buffer, READ_BUFFER_SIZE)) > 0)
         write(STDOUT, read_buffer, (size_t)n);
 
-    for (;;)
+    for (; n >= 0;)
     {
         sleep(1);
         while ((n = read(fd, read_buffer, READ_BUFFER_SIZE)) > 0)
@@ -187,7 +187,6 @@ write_file(const char *path, const char *content)
         return 1;
     }
     write(fd, content, strlen(content));
-    write(fd, "\n", 1);
     close(fd);
     return 0;
 }

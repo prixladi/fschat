@@ -65,7 +65,7 @@ main(int argc, char *argv[])
         return ret;
     }
 
-    struct fschat_options fschat_options = { .api_base_url = "http://localhost:3000",
+    struct fschat_options fschat_options = { .api_base_url = "http://localhost:6767",
                                              .default_username = options.username };
 
     static struct fschat fschat;

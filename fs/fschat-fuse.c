@@ -22,7 +22,7 @@
 static struct fschat *get_fschat();
 
 static void *fs_init(struct fuse_conn_info *conn, struct fuse_config *cfg);
-static int fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi);
+static int fs_getattr(const char *path, struct stat *stat_buf, struct fuse_file_info *fi);
 static int fs_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi,
                       enum fuse_readdir_flags flags);
 static int fs_open(const char *path, struct fuse_file_info *fi);
@@ -64,25 +64,25 @@ fs_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 }
 
 static int
-fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
+fs_getattr(const char *path, struct stat *stat_buf, struct fuse_file_info *fi)
 {
     (void)fi;
     struct fschat *fschat = get_fschat();
 
-    memset(stbuf, 0, sizeof(struct stat));
+    memset(stat_buf, 0, sizeof(struct stat));
     if (strcmp(path, "/") == 0)
     {
-        stbuf->st_mode = __S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
+        stat_buf->st_mode = __S_IFDIR | 0755;
+        stat_buf->st_nlink = 2;
         return 0;
     }
 
     if (strcmp(path + 1, USERNAME_FILENAME) == 0)
     {
         scoped char *username = fschat_copy_username_locked(fschat);
-        stbuf->st_mode = __S_IFREG | 0666;
-        stbuf->st_nlink = 1;
-        stbuf->st_size = strlen(username);
+        stat_buf->st_mode = __S_IFREG | 0666;
+        stat_buf->st_nlink = 1;
+        stat_buf->st_size = strlen(username);
         return 0;
     }
 
@@ -94,9 +94,11 @@ fs_getattr(const char *path, struct stat *stbuf, struct fuse_file_info *fi)
         return -ENOENT;
     }
 
-    stbuf->st_mode = __S_IFREG | 0666;
-    stbuf->st_nlink = 1;
-    stbuf->st_size = channel->contents_len;
+    stat_buf->st_mode = __S_IFREG | 0666;
+    stat_buf->st_nlink = 1;
+    stat_buf->st_size = channel->contents_len;
+    if (channel->latest_message_timestamp)
+        stat_buf->st_mtime = channel->latest_message_timestamp / 1000;
 
     fschat_unlock(fschat);
 
