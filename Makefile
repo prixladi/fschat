@@ -3,7 +3,7 @@ FLAGS = -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112L -W -Wall -pedantic -Werror -std=
 SOURCES = fs/*.c fs/utils/*.c fs/external/*.c 
 HEADERS = fs/*.h fs/utils/*.h fs/external/*.h 
 
-.PHONY: build install run
+.PHONY: build
 
 setup: 
 	mkdir -p chat && mkdir -p chat2 && mkdir -p build
