@@ -40,6 +40,7 @@ struct fschat_channel
     char *name;
     char *contents;
     size_t contents_len;
+    long created_at;
     long latest_message_timestamp;
 };
 
@@ -53,7 +54,7 @@ void fschat_free(struct fschat *fschat);
 char *fschat_copy_username_locked(struct fschat *fschat);
 int fschat_replace_username_locked(struct fschat *fschat, char *username);
 
-struct fschat_channel *fschat_channel_create(long id, const char *name);
+struct fschat_channel *fschat_channel_create(long id, const char *name, long created_at);
 struct fschat_channel *fschat_channel_find_by_name(struct fschat *fschat, const char *name);
 struct fschat_channel *fschat_channel_find_by_id(struct fschat *fschat, long id);
 int fschat_channel_add(struct fschat *fschat, struct fschat_channel *channel);

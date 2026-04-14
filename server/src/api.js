@@ -21,7 +21,11 @@ api.register(async (fastify) => {
     const result = db
       .prepare('INSERT INTO channels (name) VALUES (?)')
       .run(name);
-    return reply.code(201).send({ id: result.lastInsertRowid, name });
+
+    const inserted = db
+      .prepare('SELECT * FROM channels where id = ?')
+      .get(result.lastInsertRowid);
+    return reply.code(201).send({ ...inserted });
   });
 
   fastify.delete('/channels/:id', (req, reply) => {

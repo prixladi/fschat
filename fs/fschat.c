@@ -127,7 +127,8 @@ init_channels(struct fschat *fschat)
     for (int i = 0; i < api_channels.count; i++)
     {
         struct api_channel *api_channel = api_channels.items + i;
-        struct fschat_channel *channel = fschat_channel_create(api_channel->id, api_channel->name);
+        struct fschat_channel *channel =
+            fschat_channel_create(api_channel->id, api_channel->name, api_channel->created_at);
         channels[i] = channel;
         log_info("Add channel '%s' with id '%ld' during initialization\n", channel->name, channel->id);
     }
@@ -230,7 +231,8 @@ channels_sync_loop(void *data)
 
                 if (i >= fschat->channel_count)
                 {
-                    struct fschat_channel *channel = fschat_channel_create(api_channel->id, api_channel->name);
+                    struct fschat_channel *channel =
+                        fschat_channel_create(api_channel->id, api_channel->name, api_channel->created_at);
                     fschat_channel_add(fschat, channel);
                     log_info("Added channel %s with id %ld\n", channel->name, channel->id);
                     added++;
@@ -402,7 +404,7 @@ fschat_free(struct fschat *fschat)
 }
 
 struct fschat_channel *
-fschat_channel_create(long id, const char *name)
+fschat_channel_create(long id, const char *name, long created_at)
 {
     struct fschat_channel *channel = calloc(1, sizeof(struct fschat_channel));
 
@@ -410,6 +412,7 @@ fschat_channel_create(long id, const char *name)
     channel->name = str_dup(name);
     channel->contents = str_dup("");
     channel->contents_len = strlen(channel->contents);
+    channel->created_at = created_at;
 
     return channel;
 }

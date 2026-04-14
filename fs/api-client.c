@@ -306,6 +306,7 @@ parse_channel(const cJSON *obj, struct api_channel *channel)
 
     cJSON *id = cJSON_GetObjectItemCaseSensitive(obj, "id");
     cJSON *name = cJSON_GetObjectItemCaseSensitive(obj, "name");
+    cJSON *created_at = cJSON_GetObjectItemCaseSensitive(obj, "created_at");
 
     if (cJSON_IsNumber(id))
         channel->id = (long)id->valuedouble;
@@ -315,6 +316,10 @@ parse_channel(const cJSON *obj, struct api_channel *channel)
         channel->name = strdup(name->valuestring);
     else
         return -2003;
+    if (cJSON_IsNumber(created_at))
+        channel->created_at = (long)created_at->valuedouble;
+    else
+        return -2004;
 
     return 0;
 }

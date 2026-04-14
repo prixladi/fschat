@@ -97,8 +97,8 @@ fs_getattr(const char *path, struct stat *stat_buf, struct fuse_file_info *fi)
     stat_buf->st_mode = __S_IFREG | 0666;
     stat_buf->st_nlink = 1;
     stat_buf->st_size = channel->contents_len;
-    if (channel->latest_message_timestamp)
-        stat_buf->st_mtime = channel->latest_message_timestamp / 1000;
+    stat_buf->st_ctime = channel->created_at / 1000;
+    stat_buf->st_mtime = MAX(channel->latest_message_timestamp / 1000, stat_buf->st_ctime);
 
     fschat_unlock(fschat);
 
@@ -277,7 +277,7 @@ fs_mknod(const char *path, mode_t mode, dev_t dev)
     {
         if (result < -1000)
             log_error(
-                "Unable to parse create channel (%s) server  response, channel was probably create but it might appear with delay.",
+                "Unable to parse create channel (%s) server  response, channel was probably created but it might appear with delay.\n",
                 channel_name);
         else
             log_error("Unable to create channel (%s) on the server, result %d\n", channel_name, result);
@@ -298,7 +298,7 @@ fs_mknod(const char *path, mode_t mode, dev_t dev)
     // Note that we can't just wait for updater because caller can try open the file instantly after creating it and it would fail
     if (i == fschat->channel_count)
     {
-        struct fschat_channel *channel = fschat_channel_create(api_channel.id, api_channel.name);
+        struct fschat_channel *channel = fschat_channel_create(api_channel.id, api_channel.name, api_channel.created_at);
         fschat_channel_add(fschat, channel);
     }
 
@@ -316,6 +316,12 @@ fs_unlink(const char *path)
     struct fschat *fschat = get_fschat();
 
     char *channel_name = (char *)path + 1;
+
+    if (strcmp(path + 1, USERNAME_FILENAME) == 0)
+    {
+        log_error("Unable to remove username file because it is a protected file.\n");
+        return -EIO;
+    }
 
     struct fschat_channel *channel = fschat_channel_find_by_name(fschat, channel_name);
     if (!channel)

@@ -32,6 +32,7 @@ struct timespec
 
 int main(int argc, char **argv);
 
+static int create_file(const char *path);
 static int read_file(const char *path);
 static int read_file_follow(const char *path);
 static int write_file(const char *path, const char *content);
@@ -80,6 +81,18 @@ main(int argc, char **argv)
         return 1;
     }
 
+    if (streq(argv[1], "create"))
+    {
+        if (argc == 3)
+            return create_file(argv[2]);
+        else
+        {
+            eprintln("error: invalid number of arguments for create command");
+            print_usage(argv[0], true);
+            return 1;
+        }
+    }
+
     if (streq(argv[1], "read"))
     {
         if (argc == 3)
@@ -125,6 +138,10 @@ print_usage(const char *exe_name, bool is_error)
 
     fprint(fd, "   ");
     fprint(fd, exe_name);
+    fprintln(fd, " create <path>");
+
+    fprint(fd, "   ");
+    fprint(fd, exe_name);
     fprintln(fd, " read <path>");
 
     fprint(fd, "   ");
@@ -134,6 +151,19 @@ print_usage(const char *exe_name, bool is_error)
     fprint(fd, "   ");
     fprint(fd, exe_name);
     fprintln(fd, " post <file> <content>");
+}
+
+static int
+create_file(const char *path)
+{
+    int fd = open(path, O_CREAT, MODE_644);
+    if (fd < 0)
+    {
+        eprintln("error: cannot create file");
+        return 1;
+    }
+
+    return 0;
 }
 
 #define READ_BUFFER_SIZE 4096
@@ -147,6 +177,7 @@ read_file(const char *path)
         eprintln("error: cannot open file");
         return 1;
     }
+
     ssize_t n;
     while ((n = read(fd, read_buffer, READ_BUFFER_SIZE)) > 0)
         write(STDOUT, read_buffer, (size_t)n);
@@ -163,6 +194,7 @@ read_file_follow(const char *path)
         eprintln("error: cannot open file");
         return 1;
     }
+
     ssize_t n;
     while ((n = read(fd, read_buffer, READ_BUFFER_SIZE)) > 0)
         write(STDOUT, read_buffer, (size_t)n);
@@ -186,6 +218,7 @@ write_file(const char *path, const char *content)
         eprintln("error: cannot open file");
         return 1;
     }
+    
     write(fd, content, strlen(content));
     close(fd);
     return 0;

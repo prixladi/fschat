@@ -10,6 +10,7 @@ struct api_channel
 {
     long id;
     char *name;
+    long created_at;
 };
 
 struct api_channel_list
