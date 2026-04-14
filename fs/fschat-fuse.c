@@ -200,12 +200,7 @@ fs_write(const char *path, const char *buf, size_t size, off_t offset, struct fu
 {
     struct fschat *fschat = get_fschat();
     (void)fi;
-
-    if (offset)
-    {
-        log_error("Offset during write is not allowed, path - %s\n", path);
-        return -EIO;
-    }
+    (void)offset;
 
     if (size > MAX_WRITE_SIZE)
     {

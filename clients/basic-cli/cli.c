@@ -15,6 +15,7 @@ typedef unsigned int mode_t;
 
 #define MODE_644 0644
 
+#define STDIN 1
 #define STDOUT 1
 #define STDERR 2
 
@@ -36,6 +37,7 @@ static int create_file(const char *path);
 static int read_file(const char *path);
 static int read_file_follow(const char *path);
 static int write_file(const char *path, const char *content);
+static int write_file_from_stdin(const char *path);
 static void print_usage(const char *exe_name, bool is_error);
 
 static size_t strlen(const char *s);
@@ -119,6 +121,18 @@ main(int argc, char **argv)
         }
     }
 
+    if (streq(argv[1], "chat"))
+    {
+        if (argc == 3)
+            return write_file_from_stdin(argv[2]);
+        else
+        {
+            eprintln("error: invalid number of arguments for chat command");
+            print_usage(argv[0], true);
+            return 1;
+        }
+    }
+
     if (streq(argv[1], "help") || streq(argv[1], "-h") || streq(argv[1], "--help"))
     {
         print_usage(argv[0], false);
@@ -139,18 +153,27 @@ print_usage(const char *exe_name, bool is_error)
     fprint(fd, "   ");
     fprint(fd, exe_name);
     fprintln(fd, " create <path>");
+    fprintln(fd, "           - create a chat room");
 
     fprint(fd, "   ");
     fprint(fd, exe_name);
     fprintln(fd, " read <path>");
+    fprintln(fd, "           - read from the chat room");
 
     fprint(fd, "   ");
     fprint(fd, exe_name);
-    fprintln(fd, " read -f <file>");
+    fprintln(fd, " read -f <path>");
+    fprintln(fd, "           - read from the chat room following the content until interrupted");
 
     fprint(fd, "   ");
     fprint(fd, exe_name);
-    fprintln(fd, " post <file> <content>");
+    fprintln(fd, " post <path> <content>");
+    fprintln(fd, "           - post content to the chat room");
+
+    fprint(fd, "   ");
+    fprint(fd, exe_name);
+    fprintln(fd, " chat <path>");
+    fprintln(fd, "           - read content from stdin line by line and post it to the chat room");
 }
 
 static int
@@ -218,8 +241,26 @@ write_file(const char *path, const char *content)
         eprintln("error: cannot open file");
         return 1;
     }
-    
+
     write(fd, content, strlen(content));
+    close(fd);
+    return 0;
+}
+
+static int
+write_file_from_stdin(const char *path)
+{
+    int fd = open(path, O_WRONLY | O_CREAT, MODE_644);
+    if (fd < 0)
+    {
+        eprintln("error: cannot open file");
+        return 1;
+    }
+
+    ssize_t n;
+    while ((n = read(STDIN, read_buffer, READ_BUFFER_SIZE)) > 0)
+        write(fd, read_buffer, (size_t)n);
+
     close(fd);
     return 0;
 }
